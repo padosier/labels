@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Labeling</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #1a1916; color: #f2efe8;
+           font: 17px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 24px; box-sizing: border-box; }
+    main { max-width: 420px; text-align: center; }
+    p { color: #b8b3a8; }
+    button { font: inherit; font-size: 17px; padding: 12px 20px; border-radius: 12px; border: 1px solid #3c3a33; background: #e0a94a; color: #17140c; font-weight: 700; }
+    .small { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="h">Opening the labeling page…</h1>
+    <p id="p">One moment.</p>
+    <p id="retry" hidden><button onclick="go()">Try again</button></p>
+  </main>
+  <script>
+    // Stable entry point for the labeling link (2026-10-28). The laptop's quick-tunnel host changes on every tunnel restart; the
+    // supervisor publishes the current one to host.json here. The token lives in the URL fragment (#t=...), which the browser never
+    // sends to GitHub, so this page and this repository never see it. Only a *.trycloudflare.com host is ever redirected to.
+    const HOST_RE = /^[a-z0-9-]+\.trycloudflare\.com$/;
+    function say(h, p, retry) { document.getElementById("h").textContent = h; document.getElementById("p").textContent = p; document.getElementById("retry").hidden = !retry; }
+    function token() { const m = /(?:^|[#&])t=([^&]+)/.exec(location.hash); return m ? decodeURIComponent(m[1]) : null; }
+    async function go() {
+      const t = token();
+      if (!t) { say("This link is missing its key.", "Open the full link you were sent (it ends with #t=…), or ask Patrick for it.", false); return; }
+      say("Opening the labeling page…", "One moment.", false);
+      let host = null;
+      try {
+        const r = await fetch("host.json?v=" + Date.now(), { cache: "no-store" });
+        host = (await r.json()).host;
+      } catch (e) { say("Could not read where the labeling laptop is.", "Check your connection and try again.", true); return; }
+      if (!HOST_RE.test(host || "")) { say("The labeling laptop has not published its address yet.", "Try again in a minute.", true); return; }
+      // is the laptop reachable? (an opaque response is fine; a network error means the tunnel is down)
+      try {
+        const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 8000);
+        await fetch("https://" + host + "/projects", { mode: "no-cors", cache: "no-store", signal: ctl.signal });
+        clearTimeout(timer);
+      } catch (e) { say("The labeling laptop is not reachable right now.", "It may be restarting or offline. Try again in a minute; nothing you labeled is lost.", true); return; }
+      location.replace("https://" + host + "/projects?token=" + encodeURIComponent(t));
+    }
+    go();
+  </script>
+</body>
+</html>
